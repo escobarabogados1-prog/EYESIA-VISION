@@ -1,0 +1,72 @@
+const express = require('express');
+const statusRouter = require('./routes/status');
+const camera = require('./services/camera');
+
+const app = express();
+const PORT = 3001;
+
+let latestFrame = null;
+let clients = [];
+
+app.use('/api', statusRouter);
+
+app.get('/', (req, res) => {
+  res.json({
+    sistema: 'ELITH SECURITYCAM',
+    estado: 'online',
+    camara: latestFrame ? 'recibiendo video' : 'esperando video'
+  });
+});
+
+app.get('/api/camera/frame', (req, res) => {
+  if (!latestFrame) {
+    return res.status(503).json({
+      estado: 'esperando frame de la cámara'
+    });
+  }
+
+  res.set('Content-Type', 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  res.send(latestFrame);
+});
+
+app.get('/api/camera/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  clients.push(res);
+
+  req.on('close', () => {
+    clients = clients.filter(client => client !== res);
+  });
+});
+
+camera.connectCamera((frame) => {
+  latestFrame = frame;
+
+  const header = Buffer.from(
+    '--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ' +
+    frame.length +
+    '\r\n\r\n'
+  );
+
+  const footer = Buffer.from('\r\n');
+
+  for (const client of clients) {
+    try {
+      client.write(header);
+      client.write(frame);
+      client.write(footer);
+    } catch (error) {
+      clients = clients.filter(item => item !== client);
+    }
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`ELITH SECURITYCAM funcionando en http://localhost:${PORT}`);
+});
