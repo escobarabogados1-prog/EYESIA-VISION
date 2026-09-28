@@ -1,0 +1,36 @@
+
+mqtt:
+  host: mosquitto
+  port: 1883
+  topic_prefix: frigate
+
+detectors:
+  cpu1:
+    type: cpu
+
+cameras:
+  elith_cam_1:
+    ffmpeg:
+      inputs:
+        - path: http://elith1:{FRIGATE_CAMERA_PASSWORD}@192.168.2.9:4444/video/mjpeg
+          roles:
+            - detect
+
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+
+    objects:
+      track:
+        - person
+
+    record:
+      enabled: false
+
+    snapshots:
+      enabled: false
+
+
+

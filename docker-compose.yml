@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: eyesia-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: eyesia-frigate
+    restart: unless-stopped
+    privileged: false
+    shm_size: "128mb"
+    depends_on:
+      - mosquitto
+    environment:
+      - FRIGATE_CAMERA_PASSWORD=${CAMERA_PASSWORD}
+    ports:
+      - "5000:5000"   # UI / API de Frigate
+      - "8554:8554"   # go2rtc (RTSP relay interno de Frigate), no usado aún pero expuesto por defecto
+    volumes:
+      - ./frigate/config/config.yml:/config/config.yml:ro
+      - ./frigate/storage:/media/frigate
+
+# Node.js (este proyecto) sigue ejecutándose fuera de Docker con `npm start`,
+# tal como se pidió para esta fase. Se conecta a Mosquitto en localhost:1883
+# (el puerto queda publicado al host arriba).

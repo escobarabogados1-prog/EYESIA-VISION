@@ -1,0 +1,36 @@
+
+mqtt:
+  host: mosquitto
+  port: 1883
+  topic_prefix: frigate
+
+detectors:
+  cpu1:
+    type: cpu
+
+cameras:
+  elith_cam_1:
+    ffmpeg:
+      inputs:
+        - path: rtsp://elith1:{FRIGATE_CAMERA_PASSWORD}@192.168.5.108:8080/h264.sdp
+          roles:
+            - detect
+
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 10
+
+    objects:
+      track:
+        - person
+
+    record:
+      enabled: false
+
+    snapshots:
+      enabled: false
+
+
+
