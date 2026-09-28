@@ -4,6 +4,7 @@ const statusRouter = require('./routes/status');
 const camera = require('./services/camera');
 const mqttService = require('./services/mqtt');
 const eventsService = require('./services/events');
+const identityService = require('./services/identity');
 
 const app = express();
 const PORT = 3001;
@@ -14,6 +15,10 @@ let clients = [];
 app.locals.camera = { connected: false };
 
 app.use('/api', statusRouter);
+
+app.get('/api/system/identity', (req, res) => {
+  res.json(identityService.getIdentity());
+});
 
 app.get('/', (req, res) => {
   res.json({
