@@ -5,7 +5,7 @@ const camera = require('./services/camera');
 const mqttService = require('./services/mqtt');
 const eventsService = require('./services/events');
 const identityService = require('./services/identity');
-
+const installationService = require('./services/installation');
 const app = express();
 const PORT = 3001;
 
@@ -19,7 +19,9 @@ app.use('/api', statusRouter);
 app.get('/api/system/identity', (req, res) => {
   res.json(identityService.getIdentity());
 });
-
+app.get('/api/system/installation', (req, res) => {
+  res.json(installationService.getInstallation());
+});
 app.get('/', (req, res) => {
   res.json({
     sistema: 'ELITH SECURITYCAM',
