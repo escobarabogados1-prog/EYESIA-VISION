@@ -6,6 +6,7 @@ const mqttService = require('./services/mqtt');
 const eventsService = require('./services/events');
 const identityService = require('./services/identity');
 const installationService = require('./services/installation');
+const deviceService = require('./services/device');
 const app = express();
 const PORT = 3001;
 
@@ -21,6 +22,10 @@ app.get('/api/system/identity', (req, res) => {
 });
 app.get('/api/system/installation', (req, res) => {
   res.json(installationService.getInstallation());
+});
+
+app.get('/api/system/device', (req, res) => {
+  res.json(deviceService.getDevice());
 });
 app.get('/', (req, res) => {
   res.json({

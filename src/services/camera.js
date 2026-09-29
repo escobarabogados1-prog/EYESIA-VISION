@@ -1,7 +1,7 @@
 const http = require('http');
+const CAMERA_HOST = '192.168.5.108';
+const CAMERA_PORT = 8080;
 
-const CAMERA_HOST = '192.168.5.107';
-const CAMERA_PORT = 4444;
 const CAMERA_USER = 'elith1';
 const CAMERA_PASSWORD = process.env.CAMERA_PASSWORD;
 
