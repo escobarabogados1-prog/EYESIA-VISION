@@ -48,3 +48,22 @@ El prototipo implementa una evaluacion fail-closed: sin politica o sin
 coincidencia exacta la propuesta queda bloqueada; una coincidencia en pruebas
 solo puede producir `dry_run`. Los metadatos sinteticos de aprobacion no son
 una verificacion de identidad ni una aprobacion confiable de producto.
+
+## 2026-09-30 - Puerto de proveedor de IA
+
+El analyzer depende de `provider.generate({prompt, timeoutMs})` y conserva un
+solo contrato de resultado OIV. `ollama` con `qwen2.5:3b` permanece como motor
+experimental predeterminado. `openai-compatible` permite integrar `llama.cpp
+server` u otro runtime compatible sin alterar el analyzer.
+
+No hay runtime alternativo instalado en el entorno, asi que la integracion se
+prepara y se valida tecnicamente con mocks; no se declara inferencia ni calidad
+real. `npm test` es la suite tecnica; `npm run eval:model` y `eval:ollama` son
+evaluaciones de calidad provisionales y separadas.
+
+## 2026-09-30 - Journal OIV volatil
+
+Se agrega un journal acotado a 100 decisiones para diagnostico independiente
+del proveedor. Conserva solo metadata minima; no almacena contexto crudo, imagen,
+razonamiento ni payload de origen. Se pierde al reiniciar y no sustituye un
+backend de auditoria durable ni establece retencion historica de producto.

@@ -3,23 +3,25 @@ require('dotenv').config();
  * EYESIA VISION
  * Operational Intelligence
  *
- * Capa de abstracción entre EYESIA y Ollama.
- * El modelo puede cambiar sin modificar el resto de EYESIA.
+ * Núcleo de análisis OIV independiente del proveedor de inferencia.
+ * Los adaptadores de transporte se seleccionan por configuración.
  */
 
 const contract = require('./contract');
 const { buildEventContext } = require('./context');
+const { createProvider } = require('./providers');
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:3b';
-const OLLAMA_SEED = Number(process.env.OLLAMA_SEED) || 42;
+function createAnalyzer({ provider = createProvider() } = {}) {
+  if (!provider || typeof provider.generate !== 'function') {
+    throw new Error('El proveedor de IA debe implementar generate');
+  }
 
-async function analyze(event) {
-  contract.validateInput(event);
-  const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS) || 60000;
-  const context = buildEventContext(event);
+  async function analyze(event) {
+    contract.validateInput(event);
+    const timeoutMs = Number(process.env.AI_TIMEOUT_MS || process.env.OLLAMA_TIMEOUT_MS) || 60000;
+    const context = buildEventContext(event);
 
-  const prompt = `
+    const prompt = `
 Eres el módulo Operational Intelligence de EYESIA VISION.
 
 Analiza únicamente los datos proporcionados.
@@ -57,62 +59,46 @@ Responde únicamente con un objeto JSON válido que contenga estos campos:
 - recommended_action: acción breve y no vacía, limitada a la evidencia disponible.
 `;
 
-  let response;
-  try {
-    response = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        prompt,
-        stream: false,
-        format: 'json',
-        options: {
-          temperature: 0,
-          seed: OLLAMA_SEED
-        }
-      }),
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-  } catch (error) {
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      throw new Error(`Timeout esperando respuesta de Ollama (${timeoutMs} ms)`);
+    let responseText;
+    try {
+      responseText = await provider.generate({ prompt, timeoutMs });
+    } catch (error) {
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        const providerName = provider.displayName || provider.id;
+        throw new Error(`Timeout esperando respuesta de ${providerName} (${timeoutMs} ms)`);
+      }
+
+      throw error;
     }
 
-    throw error;
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      throw new Error(`La respuesta de ${provider.id} no contiene JSON válido`);
+    }
+
+    return contract.createResult({
+      classification: result.classification,
+      risk: result.risk,
+      confidence: result.confidence,
+      factors: result.factors,
+      reason: result.reason,
+      missingData: result.missing_data,
+      recommendedAction: result.recommended_action
+    });
   }
 
-  if (!response.ok) {
-    throw new Error(`Error Ollama: HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  if (!data.response) {
-    throw new Error('Ollama no devolvió respuesta');
-  }
-
-  let result;
-
-  try {
-    result = JSON.parse(data.response);
-  } catch {
-    throw new Error('La respuesta de Ollama no contiene JSON válido');
-  }
-
-  return contract.createResult({
-    classification: result.classification,
-    risk: result.risk,
-    confidence: result.confidence,
-    factors: result.factors,
-    reason: result.reason,
-    missingData: result.missing_data,
-    recommendedAction: result.recommended_action
-  });
+  return {
+    analyze,
+    getProviderInfo: () => ({ id: provider.id, model: provider.model })
+  };
 }
 
+const defaultAnalyzer = createAnalyzer();
+
 module.exports = {
-  analyze
+  analyze: defaultAnalyzer.analyze,
+  createAnalyzer,
+  getProviderInfo: defaultAnalyzer.getProviderInfo
 };

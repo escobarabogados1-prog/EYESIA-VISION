@@ -1,7 +1,11 @@
 require('dotenv').config();
 
 const { performance } = require('node:perf_hooks');
-const analyzer = require('../src/services/operational-intelligence/analyzer');
+const { createAnalyzer } = require('../src/services/operational-intelligence/analyzer');
+const { createProvider } = require('../src/services/operational-intelligence/providers');
+
+const providerName = process.argv[2] || process.env.AI_PROVIDER || 'ollama';
+const analyzer = createAnalyzer({ provider: createProvider(providerName) });
 
 const baseEvent = {
   event_id: 'ollama-eval-fixed',
@@ -53,9 +57,10 @@ async function main() {
   const report = {
     evaluationType: 'provisional prompt-invariant diagnostic',
     ownerApproved: false,
-    model: process.env.OLLAMA_MODEL || 'qwen2.5:3b',
+    provider: analyzer.getProviderInfo().id,
+    model: analyzer.getProviderInfo().model,
     temperature: 0,
-    seed: Number(process.env.OLLAMA_SEED) || 42,
+    seed: Number(process.env.AI_SEED || process.env.OLLAMA_SEED) || 42,
     checks: {
       allRequestsCompleted,
       classificationUnchangedAcrossDetectorConfidence: allRequestsCompleted && classifications.size === 1,

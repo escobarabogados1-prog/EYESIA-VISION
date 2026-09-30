@@ -7,6 +7,10 @@ const analyzer = require('../src/services/operational-intelligence/analyzer');
 const { buildEventContext } = require('../src/services/operational-intelligence/context');
 const { createContext } = require('../src/services/operational-intelligence/context-contract');
 const { evaluateDecision } = require('../src/services/operational-intelligence/decision-gate');
+const { createAnalyzer } = require('../src/services/operational-intelligence/analyzer');
+const { createProvider } = require('../src/services/operational-intelligence/providers');
+const { createOpenAICompatibleProvider } = require('../src/services/operational-intelligence/providers/openai-compatible');
+const { createDecisionJournal } = require('../src/services/operational-intelligence/decision-journal');
 const { createAnalysisQueue } = require('../src/services/operational-intelligence/analysis-queue');
 const eventsService = require('../src/services/events');
 const statusRouter = require('../src/routes/status');
@@ -34,6 +38,7 @@ test('exposes analysis failure in /api/status without changing existing fields',
       pending: 0
     })
   };
+  app.locals.aiProvider = { id: 'ollama', model: 'qwen2.5:3b' };
   app.use('/api', statusRouter);
 
   const server = app.listen(0);
@@ -48,6 +53,7 @@ test('exposes analysis failure in /api/status without changing existing fields',
     assert.equal(typeof status.mqtt.conectado, 'boolean');
     assert.equal(status.cola_analisis.failed, 1);
     assert.equal(status.cola_analisis.lastError, 'fetch failed');
+    assert.deepEqual(status.motor_ia, { id: 'ollama', model: 'qwen2.5:3b' });
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -451,6 +457,119 @@ test('creates valid analysis results and rejects invalid classifications', () =>
   );
 });
 
+test('analyzes through an injected provider without changing the OIV result contract', async () => {
+  let submittedPrompt = '';
+  const provider = {
+    id: 'synthetic-provider',
+    model: 'fixture-model',
+    async generate({ prompt }) {
+      submittedPrompt = prompt;
+      return JSON.stringify({
+        classification: 'DETECCION',
+        risk: 'BAJO',
+        confidence: 0.61,
+        factors: [],
+        reason: 'Resultado sintetico para probar el puerto.',
+        missing_data: [],
+        recommended_action: 'REVISAR'
+      });
+    }
+  };
+  const injectedAnalyzer = createAnalyzer({ provider });
+  const result = await injectedAnalyzer.analyze(validEvent);
+
+  assert.equal(result.classification, 'DETECCION');
+  assert.equal(result.risk, 'BAJO');
+  assert.equal(result.recommended_action, 'REVISAR');
+  assert.match(submittedPrompt, /CONTEXTO OBSERVABLE DEL EVENTO/);
+  assert.deepEqual(injectedAnalyzer.getProviderInfo(), {
+    id: 'synthetic-provider',
+    model: 'fixture-model'
+  });
+});
+
+test('selects Ollama by default and supports the OpenAI-compatible adapter', () => {
+  const ollama = createProvider('ollama');
+  const compatible = createProvider('openai-compatible');
+
+  assert.equal(ollama.id, 'ollama');
+  assert.equal(ollama.model, 'qwen2.5:3b');
+  assert.equal(compatible.id, 'openai-compatible');
+  assert.throws(() => createProvider('unknown-engine'), /no soportado/);
+});
+
+test('sends JSON-mode chat requests through the OpenAI-compatible adapter', async () => {
+  const originalFetch = global.fetch;
+  let requestUrl;
+  let requestOptions;
+  global.fetch = async (url, options) => {
+    requestUrl = String(url);
+    requestOptions = options;
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: { content: '{"classification":"DETECCION"}' }
+        }]
+      })
+    };
+  };
+
+  try {
+    const provider = createOpenAICompatibleProvider({
+      baseUrl: 'http://127.0.0.1:8080/v1/',
+      model: 'local-instruct',
+      apiKey: 'synthetic-test-key',
+      seed: 17
+    });
+    const response = await provider.generate({ prompt: 'Analiza datos.', timeoutMs: 1000 });
+    const body = JSON.parse(requestOptions.body);
+
+    assert.equal(requestUrl, 'http://127.0.0.1:8080/v1/chat/completions');
+    assert.equal(requestOptions.headers.Authorization, 'Bearer synthetic-test-key');
+    assert.equal(body.model, 'local-instruct');
+    assert.deepEqual(body.response_format, { type: 'json_object' });
+    assert.equal(body.seed, 17);
+    assert.equal(response, '{"classification":"DETECCION"}');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('applies the shared timeout to the OpenAI-compatible provider', async () => {
+  const originalFetch = global.fetch;
+  const originalTimeout = process.env.AI_TIMEOUT_MS;
+  process.env.AI_TIMEOUT_MS = '10';
+  global.fetch = (_url, options) => new Promise((resolve, reject) => {
+    const keepAlive = setTimeout(() => {}, 1000);
+    options.signal.addEventListener('abort', () => {
+      clearTimeout(keepAlive);
+      reject(options.signal.reason);
+    }, { once: true });
+  });
+
+  try {
+    const compatibleAnalyzer = createAnalyzer({
+      provider: createOpenAICompatibleProvider({
+        baseUrl: 'http://127.0.0.1:8080/v1',
+        model: 'local-instruct'
+      })
+    });
+
+    await assert.rejects(
+      compatibleAnalyzer.analyze(validEvent),
+      /Timeout esperando respuesta de OpenAI-compatible \(10 ms\)/
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (originalTimeout === undefined) {
+      delete process.env.AI_TIMEOUT_MS;
+    } else {
+      process.env.AI_TIMEOUT_MS = originalTimeout;
+    }
+  }
+});
+
 test('aborts Ollama requests after the configured timeout', async () => {
   const originalFetch = global.fetch;
   const originalTimeout = process.env.OLLAMA_TIMEOUT_MS;
@@ -596,4 +715,56 @@ test('records analysis failures and continues with the newest pending event', as
   assert.equal(queue.getState().failed, 1);
   assert.equal(queue.getState().completed, 1);
   assert.equal(queue.getState().pending, 0);
+});
+
+test('journals redacted decision metadata in a bounded model-neutral buffer', () => {
+  const journal = createDecisionJournal({ capacity: 2 });
+  const context = {
+    context_id: 'journal-event-1',
+    domain: 'surveillance',
+    raw_event: { private_payload: 'not stored' }
+  };
+  const provider = { id: 'openai-compatible', model: 'local-instruct' };
+  const analysis = {
+    classification: 'DETECCION',
+    risk: 'BAJO',
+    reason: 'private model rationale'
+  };
+  const decision = {
+    status: 'BLOCKED',
+    reason_code: 'POLICY_MISSING',
+    policy_id: null,
+    policy_version: null,
+    execution: { mode: 'dry_run', attempted: false }
+  };
+
+  journal.record({ context, provider, analysis, decision });
+  journal.record({
+    context: { ...context, context_id: 'journal-event-2' },
+    provider: { id: 'ollama', model: 'qwen2.5:3b' },
+    analysis,
+    decision,
+    recordedAt: '2026-09-30T13:00:00.000Z'
+  });
+  const latest = journal.record({
+    context: { ...context, context_id: 'journal-event-3' },
+    provider,
+    analysis,
+    decision,
+    recordedAt: '2026-09-30T13:01:00.000Z'
+  });
+
+  assert.equal(latest.context_id, 'journal-event-3');
+  assert.equal('raw_event' in latest, false);
+  assert.equal('reason' in latest, false);
+  assert.deepEqual(journal.getState(), {
+    entries: 2,
+    capacity: 2,
+    overwritten: 1,
+    lastRecordedAt: '2026-09-30T13:01:00.000Z'
+  });
+  assert.deepEqual(journal.getRecent(1).map(({ context_id }) => context_id), [
+    'journal-event-3'
+  ]);
+  assert.deepEqual(journal.getRecent(0), []);
 });

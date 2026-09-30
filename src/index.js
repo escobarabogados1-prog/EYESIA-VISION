@@ -7,23 +7,36 @@ const eventsService = require('./services/events');
 const analyzer = require('./services/operational-intelligence/analyzer');
 const { buildEventContext } = require('./services/operational-intelligence/context');
 const { evaluateDecision } = require('./services/operational-intelligence/decision-gate');
+const { createDecisionJournal } = require('./services/operational-intelligence/decision-journal');
 const { createAnalysisQueue } = require('./services/operational-intelligence/analysis-queue');
 const identityService = require('./services/identity');
 const installationService = require('./services/installation');
 const deviceService = require('./services/device');
 const app = express();
 const PORT = 3001;
+const decisionJournal = createDecisionJournal();
 const analysisQueue = createAnalysisQueue({
   analyze: analyzer.analyze,
   onResult: (event, analysis) => {
     if (eventsService.getLatestEvent() !== event) return false;
 
+    const context = buildEventContext(event);
     const decision = evaluateDecision({
-      context: buildEventContext(event),
+      context,
       proposal: analysis
     });
 
-    return eventsService.recordAnalysis(event.event_id, analysis, decision);
+    if (!eventsService.recordAnalysis(event.event_id, analysis, decision)) {
+      return false;
+    }
+
+    decisionJournal.record({
+      context,
+      provider: analyzer.getProviderInfo(),
+      analysis,
+      decision
+    });
+    return true;
   }
 });
 
@@ -32,6 +45,8 @@ let clients = [];
 
 app.locals.camera = camera.getCameraState();
 app.locals.analysisQueue = analysisQueue;
+app.locals.aiProvider = analyzer.getProviderInfo();
+app.locals.decisionJournal = decisionJournal;
 
 app.use('/api', statusRouter);
 
@@ -123,6 +138,7 @@ app.get('/api/events/health', (req, res) => {
     mqtt_ultimo_error: mqttState.lastError,
     mqtt_ultima_suscripcion: mqttState.lastSubscribedAt,
     cola_analisis: analysisQueue.getState(),
+    decision_journal: decisionJournal.getState(),
     frigate_recibiendo_eventos: Boolean(mqttState.lastMessageAt),
     ultimo_mensaje_mqtt: mqttState.lastMessageAt,
     ultimo_evento_en: latestEvent ? latestEvent.timestamp : null

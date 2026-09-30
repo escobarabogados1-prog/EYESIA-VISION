@@ -7,16 +7,16 @@
 
 ## 1. Resumen ejecutivo
 
-El prototipo local ejecuta y prueba el flujo de video Frigate, eventos MQTT, normalizacion, API, analisis Ollama y Decision Gate en modo simulacion. La suite automatizada actual pasa 16 de 16 pruebas. Se verificaron reconexion MQTT, relay de video desde Frigate, funcionamiento de la cola acotada y continuidad de la API ante la indisponibilidad de Ollama.
+El prototipo local ejecuta y prueba el flujo de video Frigate, eventos MQTT, normalizacion, API, analisis mediante un puerto de proveedor, Decision Gate en modo simulacion y journal volatil. La suite automatizada actual pasa 21 de 21 pruebas. Se verificaron reconexion MQTT, relay de video desde Frigate, funcionamiento de la cola acotada y continuidad de la API ante la indisponibilidad del motor configurado.
 
 **El sistema no esta listo para declararse conforme ni para cerrar Gate 3.** La matriz oficial del PRD aun contiene diez criterios sin definicion. Ademas, Ollama `qwen2.5:3b` produjo una alerta de riesgo medio basandose unicamente en una confidence detectora alta, en contra de las instrucciones del prompt. Los resultados de carga y del modelo son evidencia local exploratoria, no una evaluacion contra un conjunto de verdad-terreno aprobado.
 
-Al corte, Ollama responde desde el host con el modelo `qwen2.5:3b`; Mosquitto y Frigate no estan activos. El repositorio contiene cambios locales y archivos no seguidos; este informe no certifica su autoria, revision o integracion.
+Al corte, Ollama responde desde el host con el modelo experimental `qwen2.5:3b`; `llama.cpp server` no esta instalado. Mosquitto y Frigate no estan activos. El adaptador OpenAI-compatible se valido con mocks; no se hizo inferencia real ni se evaluo calidad de un motor alternativo.
 
 ## 2. Alcance y arquitectura observada
 
 - Runtime operativo del prototipo: Node.js/CommonJS y Express.
-- Flujo implementado: camara -> Frigate -> MQTT/Mosquitto -> normalizacion Node -> contexto OIV -> cola latest-wins -> Ollama -> Decision Gate fail-closed/dry-run -> API REST.
+- Flujo implementado: camara -> Frigate -> MQTT/Mosquitto -> normalizacion Node -> contexto OIV -> cola latest-wins -> proveedor IA seleccionado -> Decision Gate fail-closed/dry-run -> API REST.
 - El relay MJPEG de Node consume el endpoint multipart de Frigate.
 - La arquitectura destino documentada es EDGE en Go, pero no hay implementacion Go ni plan de migracion aprobado.
 - Supabase/PostgreSQL, NATS y Keygen CE no estan integrados como componentes verificables del prototipo.
@@ -27,10 +27,12 @@ Al corte, Ollama responde desde el host con el modelo `qwen2.5:3b`; Mosquitto y 
 
 | Area | Estado y evidencia | Limite |
 |---|---|---|
-| Pruebas automatizadas | `npm test`: 16 aprobadas, 0 fallidas en la ejecucion de esta fecha. | No equivale a pruebas de produccion ni a cierre de Gate 3. |
+| Pruebas automatizadas | `npm test`: 21 aprobadas, 0 fallidas en la ejecucion de esta fecha. | Son pruebas tecnicas con transporte simulado; no evalua calidad real de modelos ni cierra Gate 3. |
 | Normalizacion | Pruebas de eventos `new`, `update` y `end`, y evento sintetico recibido por MQTT real. | Falta cobertura de payload MQTT malformado en proceso vivo. |
 | Contexto OIV | Frigate se adapta al contrato neutral; fixture sintetica valida estructura de afluencia e inventario. | No hay adaptador, analisis ni ejecucion retail implementados. |
 | Decision Gate | Sin politica bloquea; una coincidencia exacta con politica sintetica aprobada produce solo `dry_run`. | No hay registro confiable/aprobacion de politicas ni executor real. |
+| Motores IA | Analyzer desacoplado; Ollama y OpenAI-compatible cubiertos con mocks. | `llama.cpp server` no esta instalado; alternativa preparada, no validada con inferencia real. |
+| Journal de decisiones | Buffer volatil de 100 registros minimos; registra sobrescrituras y no retiene payload/contexto. | Se pierde al reiniciar; no es auditoria durable ni retencion de producto aprobada. |
 | Video | Frigate recibio la camara; `/api/camera/frame` y `/api/camera/stream` devolvieron imagen/stream durante una prueba local. | Observacion puntual; no hay SLO ni ventana de disponibilidad aprobada. |
 | MQTT | Se comprobo suscripcion y reconexion/resuscripcion al detener y reiniciar Mosquitto. | No se establecio tiempo limite de recuperacion ni se midieron mensajes perdidos durante la caida. |
 | Ollama inaccesible | El evento permanece consultable; el analisis retorna 204; la cola reporta `failed=1` y `lastError`; Node continua respondiendo. | El comportamiento es volatil y no hay reintento/durabilidad. |

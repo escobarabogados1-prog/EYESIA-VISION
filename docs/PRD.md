@@ -108,7 +108,8 @@ Los recursos actuales deben seguir siendo compatibles.
 
 Operational Intelligence debe poder analizar un evento mediante un proveedor
 configurable. Ollama es el proveedor local inicial, pero no debe ser una
-dependencia del dominio.
+dependencia del dominio. El núcleo debe depender de un puerto común de
+generacion, no de endpoints o formatos de transporte de un proveedor.
 
 ### RF-06. Contexto transversal
 

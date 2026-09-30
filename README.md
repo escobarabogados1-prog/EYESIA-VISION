@@ -21,10 +21,10 @@ La cámara sigue además conectada directamente a Node.js (src/services/camera.j
 para el relay MJPEG original (/api/camera/frame, /api/camera/stream), sin cambios.
 ```
 
-Operational Intelligence ya analiza eventos de vigilancia con Ollama. El
-contrato OIV neutral permite futuros adaptadores; por ahora solo Frigate está
-integrado. Sin política, el Decision Gate bloquea la propuesta; una coincidencia
-solo genera una vista previa `dry_run`, nunca ejecuta acciones externas.
+Operational Intelligence analiza eventos de vigilancia mediante un proveedor
+intercambiable. Ollama/Qwen es el default experimental; el contrato OIV no
+depende de ese motor. Sin política, el Decision Gate bloquea la propuesta; una
+coincidencia solo genera una vista previa `dry_run`, nunca ejecuta acciones externas.
 Dashboard avanzado, notificaciones externas y licenciamiento siguen fuera del
 alcance actual.
 
@@ -36,10 +36,25 @@ Copia `.env.example` a `.env` y complétalo:
 - `MQTT_URL` — URL del broker MQTT (por defecto `mqtt://localhost:1883`).
 - `FRIGATE_TOPIC_PREFIX` — prefijo de topics de Frigate (por defecto `frigate`).
 - `FRIGATE_URL` y `FRIGATE_CAMERA` — origen del relay MJPEG de Frigate.
+- `AI_PROVIDER` — `ollama` (predeterminado experimental) o
+  `openai-compatible`.
+- `AI_TIMEOUT_MS` y `AI_SEED` — timeout y semilla del proveedor.
 - `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_MS` y `OLLAMA_SEED` — analyzer
-  local y generación determinista.
+  local experimental y generación determinista.
+- `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_MODEL` y
+  `OPENAI_COMPATIBLE_API_KEY` — endpoint compatible opcional; la key puede
+  quedar vacía para un runtime local sin autenticación.
 
 `.env` nunca debe subirse a Git (ya está en `.gitignore`).
+
+`npm test` valida el software con dependencias simuladas. `npm run eval:model`
+es un diagnóstico de calidad que requiere el motor configurado.
+`npm run eval:ollama` conserva la evaluación experimental de `qwen2.5:3b`; no
+es un gate de software ni selecciona el modelo definitivo.
+
+Con un servidor OpenAI-compatible instalado y activo, selecciona
+`AI_PROVIDER=openai-compatible` y configura su URL/modelo antes de ejecutar
+`npm run eval:model`.
 
 ## Arrancar Mosquitto y Frigate
 
@@ -85,11 +100,9 @@ Nuevos:
   tiene análisis asociado.
 - `GET /api/events/latest/decision` — decisión del gate asociada al último
   evento. En el prototipo, el gate solo bloquea o simula; no ejecuta acciones.
-- `GET /api/events/latest/decision` — resultado del Decision Gate. Sin política,
-  la propuesta queda `BLOCKED`; una coincidencia solo genera `SIMULATED`, nunca
-  ejecuta acciones externas.
 - `GET /api/events/health` — si MQTT está conectado, si Frigate está enviando
-  eventos, cuándo llegó el último y el estado/contadores de la cola de análisis.
+  eventos, cuándo llegó el último, la cola y contadores del journal volátil.
+  No devuelve el contenido del journal.
 
 ## Comprobar que MQTT funciona
 

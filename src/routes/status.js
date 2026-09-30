@@ -13,6 +13,7 @@ router.get('/status', (req, res) => {
     sistema: 'ELITH SECURITYCAM',
     estado: 'operativo',
     ia: analysis ? 'operativa' : 'esperando análisis',
+    motor_ia: req.app.locals.aiProvider || null,
     camaras: camera.connected ? 1 : 0,
     camara: {
       conectada: camera.connected,

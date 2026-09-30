@@ -16,30 +16,31 @@ Gate 3 esta abierto. Existen 10 criterios pendientes de definicion y evidencia.
 ## Trabajo actual
 
 Endurecer el prototipo Node.js de la raiz, manteniendo separada la arquitectura
-EDGE Go objetivo. Fases 1-8 estan implementadas: video, MQTT, contrato OIV,
-cola latest-wins, analyzer Ollama, adaptador Frigate, contrato de contexto
-neutral y Decision Gate fail-closed en modo dry-run. Se verificaron relay/
-camara y MQTT reales; Context y Gate tienen pruebas sinteticas.
+EDGE Go objetivo. El analyzer OIV usa un puerto de proveedor; Ollama/Qwen sigue
+como motor experimental y hay un adaptador OpenAI-compatible preparado para
+`llama.cpp server`. Contexto OIV, Decision Gate y journal volatil siguen
+desacoplados del motor; el gate bloquea por defecto y las coincidencias solo
+son dry-run.
 
 ## Siguiente paso
 
-Definir con el propietario politicas y semanticas por dominio, y un mecanismo
-confiable de aprobacion/autorizacion. Despues, anadir casos etiquetados y
-auditoria durable. Mientras falten esos controles, el runtime debe seguir
-bloqueando propuestas por `POLICY_MISSING`; no habilitar acciones reales.
+Instalar/configurar un runtime OpenAI-compatible en hardware aprobado y evaluar
+su comportamiento con casos etiquetados; mantener `qwen2.5:3b` como baseline
+experimental. Definir requisitos de persistencia antes de sustituir el journal
+volatil por auditoria durable.
 
 ## Pendientes
 
 - Estado reciente: `/api/status` expone `cola_analisis`; con Ollama caido
-	conserva HTTP 200 y `estado=operativo`, mientras reporta `failed=1`. Hay 16
+	conserva HTTP 200 y `estado=operativo`, mientras reporta `failed=1`. Hay 21
 	pruebas automatizadas aprobadas. No existe executor real ni aprobacion
 	confiable de politicas.
-- Git: `main` local contiene `93b4bcd` y `f86b0d6`; `origin/main` sigue en
-	`4b9618a`. El push agoto 20 s (`124`); no se confirmo publicacion. `eyesia/`
-	permanece sin modificar y fuera de esos commits.
-- Proximo: definir registro confiable/aprobacion de politicas y autorizacion,
-  evaluar casos etiquetados por dominio y mantener el executor deshabilitado
-  hasta que esos controles y la auditoria durable esten aprobados.
+- Git: `main` y `origin/main` sincronizados en `c712137` al iniciar esta fase.
+- No se encontro `llama-server`, `llamafile`, LM Studio ni `vllm` instalado;
+	la alternativa compatible queda preparada, sin descarga de modelo.
+- Proximo: integrar almacenamiento/auditoria de decisiones independiente del
+	proveedor y ejecutar una evaluacion comparativa solo cuando el runtime y los
+	casos etiquetados esten disponibles.
 - Confirmar requisitos cambiados del producto.
 - Confirmar clasificaciones, riesgos y acciones.
 - Decidir persistencia historica.

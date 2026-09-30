@@ -8,14 +8,13 @@
 
 ## Estado actual
 
-- `npm test`: 16 pruebas aprobadas en la ultima ejecucion.
+- `npm test`: 21 pruebas aprobadas en la ultima ejecucion.
 - `npm run eval:ollama`: herramienta diagnostica provisional; no define ni aprueba criterios de Gate 3.
+- `npm run eval:model`: diagnostico de calidad con el proveedor seleccionado.
 - Ollama accesible ahora desde este entorno en `host.docker.internal:11434`; modelo disponible: `qwen2.5:3b`.
 - Mosquitto y Frigate no estaban activos en la ultima comprobacion de `docker compose ps`.
 - No hay implementacion Go ni migracion aprobada.
-- Git: `main` local esta dos commits por delante de `origin/main`. Commits
-	`93b4bcd` y `f86b0d6`; el push expiró sin confirmación y el remoto sigue en
-	`4b9618a`. `eyesia/` no se modifico ni se incluyo.
+- Git al inicio de esta fase: `main = origin/main = c712137`.
 
 ## Trabajo verificado
 
@@ -25,9 +24,11 @@
 - Context: el analyzer recibe un resumen factual allowlisted de snapshots Frigate `before`/`after`; los campos arbitrarios de `raw_event` no se reenvian a Ollama.
 - Contexto OIV: contrato neutral probado con Frigate y fixture retail sintetica; no implica soporte funcional retail.
 - Decision Gate: propuestas se bloquean sin politica; coincidencias de politica sintetica solo producen `SIMULATED`, sin ejecucion.
+- Decision Journal: buffer volatil de 100 metadatos de decision, con contador de sobrescritura y sin payloads/contextos.
+- Motores: `analyzer.js` consume `provider.generate`; adaptadores Ollama y OpenAI-compatible conservan un unico contrato OIV. `llama.cpp server` no esta instalado.
 - Fallo de Ollama: el evento queda accesible en `/api/events/latest`, el analisis devuelve HTTP 204 y la cola cuenta `failed`/`lastError`; Node sigue respondiendo.
 - Salud: `/api/status` y `/api/events/health` exponen la cola. Actualmente `/api/status` conserva `estado: operativo` ante fallo de analisis.
-- Suite: 16 pruebas unitarias cubren normalizacion `new`/`update`/`end`, contexto OIV, Decision Gate fail-closed/dry-run, contratos, timeout, prompt, cola y respuesta HTTP de `/api/status`.
+- Suite: 21 pruebas tecnicas con mocks cubren normalizacion, contexto, Decision Gate, provider injection, protocolo OpenAI-compatible, timeout, journal, prompt, cola y API. No es evaluacion de calidad de modelo.
 
 ## Hallazgo principal de calidad
 

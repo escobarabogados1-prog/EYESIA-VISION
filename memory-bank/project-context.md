@@ -52,13 +52,18 @@ docker compose up -d
 - Existe relay MJPEG.
 - Existe recepcion y normalizacion MQTT.
 - Existe contrato de Operational Intelligence, cola bounded latest-wins y
-	adaptador Ollama.
+	puerto intercambiable de proveedor. Ollama/Qwen es el default experimental;
+	tambien existe un adaptador OpenAI-compatible.
+- `llama.cpp server` es la alternativa local preparada; el runtime no esta
+	instalado ni fue evaluado en este entorno.
 - Existe un contrato OIV de contexto neutral por dominio; el adaptador Frigate
 	resume snapshots `before`/`after` con valores escalares antes del analisis.
 - Una fixture retail sintetica valida neutralidad del contrato; no hay un
 	adaptador retail ni ejecucion automatica implementados.
 - Decision Gate compara propuestas contra reglas exactas; bloquea si falta
 	politica y solo permite `dry_run` aun con coincidencia.
+- Decision Journal conserva hasta 100 registros minimos en memoria y expone
+	solo contadores en health; no es auditoria durable.
 - La integracion completa y su persistencia siguen en evolucion.
 - El repositorio aun no contiene EDGE en Go, Supabase, NATS, Keygen CE ni
 	Qwen2-VL integrados como implementacion verificable.

@@ -186,7 +186,28 @@
 - Se limitaron IDs, numero de observaciones/cambios/campos y el tamano del
 	contexto OIV para acotar recursos.
 - `npm test`: 16 pruebas aprobadas. Gate 3 sigue abierto.
-- `93b4bcd` y `f86b0d6` permanecen en `main` local; `origin/main` sigue en
-	`4b9618a`. El push no concluyo en 20 s (`124`), por lo que la publicacion
-	sigue pendiente de conectividad/autenticacion de escritura. No se reescribio
-	historia ni se modifico `eyesia/`.
+- `93b4bcd`, `f86b0d6` y `c712137` quedaron publicados; al inicio de la fase 9,
+	`main = origin/main = c712137`. `eyesia/` permanecio sin modificar.
+
+### Fase 9: proveedores de IA intercambiables
+
+- `analyzer.js` ahora consume el puerto `provider.generate({prompt, timeoutMs})`;
+	el prompt, Context OIV y contrato de resultado no dependen del transporte.
+- Ollama sigue seleccionado por defecto con `qwen2.5:3b`, marcado experimental.
+- Agregado proveedor OpenAI-compatible, configurable para un runtime local
+	como `llama.cpp server`; admite API key opcional por entorno, nunca en codigo.
+- No hay runtime alternativo instalado en PATH; no se instalaron pesos ni se
+	modificaron Ollama, Frigate o MQTT. La alternativa queda lista para conectar,
+	no validada con inferencia real.
+- `npm test`: 20 pruebas tecnicas con proveedores simulados. No mide calidad.
+- `npm run eval:model` usa el proveedor configurado; `npm run eval:ollama`
+	fuerza el motor experimental. Ambos son diagnósticos y no cierran Gate 3.
+
+### Fase 10: journal OIV independiente del motor
+
+- Agregado `decision-journal.js`, buffer volatil de maximo 100 registros con
+	proveedor/modelo, dominio, clasificacion, riesgo y resultado del gate.
+- Omite payloads, imagenes, contexto completo y razonamiento; `/api/events/health`
+	expone solo capacidad, cantidad, sobrescrituras y timestamp reciente.
+- No reemplaza persistencia historica, retencion aprobada ni auditoria durable.
+- `npm test`: 21 pruebas aprobadas, incluyendo redaccion y sobrescritura.

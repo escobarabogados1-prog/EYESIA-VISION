@@ -42,7 +42,7 @@ Camara IP
   -> evento normalizado
   -> src/services/events.js
   -> adaptador Frigate -> contexto canonico OIV
-  -> Operational Intelligence / Ollama
+  -> Operational Intelligence / proveedor seleccionado
   -> Decision Gate fail-closed (solo dry-run)
   -> API REST
 ```
@@ -61,7 +61,7 @@ Camara IP
   -> contrato interno de evento
   -> servicio de eventos
   -> Operational Intelligence
-  -> adaptador Ollama
+  -> puerto de proveedor -> adaptador configurable
   -> resultado de analisis
   -> API REST
 ```
@@ -84,8 +84,24 @@ persistencia es en memoria y no debe considerarse almacenamiento historico.
 
 ### `src/services/operational-intelligence/analyzer.js`
 
-Orquesta la llamada al proveedor de IA y valida la respuesta mediante
-`contract.js`. Debe tener timeout, errores controlados y configuracion externa.
+Construye el prompt/contexto y valida la salida con `contract.js`. Solo conoce
+el puerto `provider.generate({prompt, timeoutMs})`; no conoce endpoints HTTP,
+autenticacion ni formato de transporte del motor.
+
+### `src/services/operational-intelligence/providers/`
+
+`createProvider()` selecciona el adaptador mediante `AI_PROVIDER`. Los
+adaptadores devuelven texto JSON; el analyzer aplica el mismo contrato OIV para
+cualquiera de ellos.
+
+- `ollama.js`: proveedor predeterminado experimental, actualmente
+  `qwen2.5:3b`. Se conserva para comparar resultados; no es requisito para la
+  suite tecnica.
+- `openai-compatible.js`: adaptador para endpoints locales compatibles con
+  `/v1/chat/completions`, incluidos `llama.cpp server`. Acepta URL/modelo y una
+  API key opcional mediante entorno. `llama-server` no esta instalado en el
+  entorno actual, por lo que el adaptador esta probado con mocks, no contra un
+  motor real.
 
 ### `src/services/operational-intelligence/decision-gate.js`
 
@@ -96,6 +112,14 @@ devuelve `BLOCKED` sin accion. Una coincidencia produce solo `SIMULATED` con
 no tiene registro confiable ni flujo de aprobacion de politicas: los metadatos
 de aprobacion solo se ejercitan en pruebas sinteticas y no habilitan produccion.
 `GET /api/events/latest/decision` expone la decision asociada al ultimo evento.
+
+### `src/services/operational-intelligence/decision-journal.js`
+
+Mantiene las ultimas 100 trazas minimas en memoria, independientes del motor.
+Registra proveedor/modelo, dominio, clasificacion, riesgo y resultado del gate;
+omite payloads, imagenes, contexto completo y razonamiento. `/api/events/health`
+expone solo cantidad, capacidad, sobrescrituras y timestamp mas reciente. Es
+diagnostico volatil, no auditoria durable ni retencion historica.
 
 ### `src/services/operational-intelligence/context-contract.js` y `context.js`
 
@@ -162,16 +186,16 @@ El resultado del modelo se considera no confiable hasta pasar por validacion.
 
 El pipeline separa la propuesta del modelo, la validacion de politica,
 autorizacion y ejecucion. El prototipo implementa solo la comparacion
-fail-closed y la previsualizacion `dry_run`; no verifica identidades de quienes
-aprueban politicas y no ejecuta acciones externas. El endpoint de decision
-expone el resultado asociado al evento actual. Registro durable, aprobacion
-confiable, autorizacion y executor siguen pendientes.
+fail-closed, la previsualizacion `dry_run` y un journal volatil; no verifica
+identidades de quienes aprueban politicas y no ejecuta acciones externas. El
+endpoint de decision expone el resultado asociado al evento actual. Registro
+durable, aprobacion confiable, autorizacion y executor siguen pendientes.
 
 ## Flujo de errores
 
 1. JSON MQTT invalido: registrar y descartar el mensaje.
 2. Evento que no cumple el contrato: registrar y no analizar.
-3. Ollama no disponible: conservar el evento con estado `analysis_pending`.
+3. Proveedor seleccionado no disponible: conservar el evento con estado `analysis_pending`.
 4. Respuesta invalida: registrar el error y no publicar una clasificacion.
 5. Evento nuevo mientras se analiza uno anterior: no sobrescribir el evento
    mas reciente con una respuesta antigua.
@@ -181,9 +205,22 @@ confiable, autorizacion y executor siguen pendientes.
 ```env
 MQTT_URL=mqtt://localhost:1883
 FRIGATE_TOPIC_PREFIX=frigate
+AI_PROVIDER=ollama
+AI_TIMEOUT_MS=60000
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:3b
+OPENAI_COMPATIBLE_BASE_URL=http://localhost:8080/v1
+OPENAI_COMPATIBLE_MODEL=local-model
 ```
+
+Para el motor compatible se selecciona `AI_PROVIDER=openai-compatible`. No se
+requiere credencial para un servidor local sin autenticacion.
+
+`npm test` valida contratos y transporte con proveedores simulados; no mide
+calidad de modelos ni necesita servicios de inferencia. `npm run eval:model`
+ejecuta el diagnostico de calidad contra el proveedor configurado. El alias
+`npm run eval:ollama` lo fija al Qwen experimental. Ningun resultado de esa
+evaluacion provisional cierra Gate 3 ni declara un modelo definitivo.
 
 ## Decisiones pendientes
 
