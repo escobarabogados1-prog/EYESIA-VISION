@@ -170,3 +170,21 @@
 - El prompt trata el contexto externo como dato no confiable. No hay executor ni
 	acciones automaticas; faltan politicas aprobadas por dominio.
 - `npm test`: 12 pruebas aprobadas. Gate 3 sigue abierto.
+
+### Fase 8: Decision Gate seguro
+
+- Agregado `decision-gate.js`: exige contexto valido, propuesta valida y una
+	politica con dominio/version/reglas exactas. Sin politica, con politica no
+	aprobada/invalida, mismatch de dominio o propuesta distinta, devuelve
+	`BLOCKED` y no crea vista previa de accion.
+- La coincidencia exacta devuelve `SIMULATED`, `execution.attempted=false` y
+	una accion allowlisted solo como preview; no existe executor externo.
+- Runtime no configura politicas: el resultado vigente es `POLICY_MISSING`.
+	La prueba de coincidencia usa metadatos sintéticos y no prueba aprobacion real.
+- `/api/events/latest/decision` expone el gate asociado al evento actual; la API
+	existente permanece compatible.
+- Se limitaron IDs, numero de observaciones/cambios/campos y el tamano del
+	contexto OIV para acotar recursos.
+- `npm test`: 16 pruebas aprobadas. Gate 3 sigue abierto.
+- El push de `93b4bcd` no se confirmo; `origin/main` sigue atrasado por
+	autenticacion de escritura. El commit local permanece intacto.

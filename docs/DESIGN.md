@@ -1,6 +1,3 @@
-### `src/services/operational-intelligence/context-contract.js` y `context.js`
-
-Construye contexto factual para el analisis a partir del evento normalizado y
 # Diseño tecnico - EYESIA VISION
 
 ## Arquitectura oficial
@@ -46,6 +43,7 @@ Camara IP
   -> src/services/events.js
   -> adaptador Frigate -> contexto canonico OIV
   -> Operational Intelligence / Ollama
+  -> Decision Gate fail-closed (solo dry-run)
   -> API REST
 ```
 
@@ -89,11 +87,24 @@ persistencia es en memoria y no debe considerarse almacenamiento historico.
 Orquesta la llamada al proveedor de IA y valida la respuesta mediante
 `contract.js`. Debe tener timeout, errores controlados y configuracion externa.
 
+### `src/services/operational-intelligence/decision-gate.js`
+
+Compara la propuesta con reglas exactas de una politica del mismo dominio.
+Sin politica, con politica no aprobada/invalida o ante cualquier diferencia,
+devuelve `BLOCKED` sin accion. Una coincidencia produce solo `SIMULATED` con
+`execution.attempted=false`; no hay executor de acciones externas. El prototipo
+no tiene registro confiable ni flujo de aprobacion de politicas: los metadatos
+de aprobacion solo se ejercitan en pruebas sinteticas y no habilitan produccion.
+`GET /api/events/latest/decision` expone la decision asociada al ultimo evento.
+
+### `src/services/operational-intelligence/context-contract.js` y `context.js`
+
 `context-contract.js` valida y crea un sobre OIV independiente del dominio:
 dominio, fuente, sujeto, instante, ciclo opcional, observaciones tipadas y
-cambios con valores escalares. `context.js` adapta eventos Frigate al contrato
-y expone objeto, score detector y zona; no asigna riesgo, no infiere intenciones
-y no reenvia `raw_event` completo.
+cambios con valores escalares; limita el contexto a 16 KiB, 32 observaciones,
+64 cambios y 64 campos por observacion. `context.js` adapta eventos Frigate al
+contrato y expone objeto, score detector y zona; no asigna riesgo, no infiere
+intenciones y no reenvia `raw_event` completo.
 
 Cada adaptador de dominio es responsable de minimizar y revisar sus datos antes
 de crear el contexto. El contrato impide estructuras anidadas arbitrarias en
@@ -102,15 +113,6 @@ las señales para evitar pasar payloads fuente completos.
 La fixture sintetica `retail_analytics` comprueba que el contrato puede
 representar afluencia e inventario sin campos de Frigate. No implementa esos
 adaptadores ni habilita su analisis.
-
-Adapta el evento Frigate al contrato canonico OIV. El contrato representa un
-dominio, sujeto, instante, ciclo, observaciones tipadas y cambios con valores
-escalares. El adaptador expone observaciones de objeto, score detector y zona;
-no asigna riesgo, no infiere intenciones y no reenvia `raw_event` completo.
-
-Cada adaptador de dominio es responsable de minimizar y revisar sus datos antes
-de crear el contexto. El contrato impide estructuras anidadas arbitrarias en
-las señales para evitar pasar payloads fuente completos.
 
 ### `src/routes/status.js`
 
@@ -158,11 +160,12 @@ El resultado del modelo se considera no confiable hasta pasar por validacion.
 
 ## Frontera de decisiones
 
-El pipeline objetivo separa la propuesta del modelo, la validacion de politica,
-la autorizacion y la ejecucion. No se habilita un executor conectado a sistemas
-externos hasta que el dominio tenga politicas y permisos aprobados, pruebas de
-casos etiquetados y trazabilidad de cada accion. La estructura actual termina
-en el analisis; esa frontera de ejecucion sigue pendiente.
+El pipeline separa la propuesta del modelo, la validacion de politica,
+autorizacion y ejecucion. El prototipo implementa solo la comparacion
+fail-closed y la previsualizacion `dry_run`; no verifica identidades de quienes
+aprueban politicas y no ejecuta acciones externas. El endpoint de decision
+expone el resultado asociado al evento actual. Registro durable, aprobacion
+confiable, autorizacion y executor siguen pendientes.
 
 ## Flujo de errores
 

@@ -8,7 +8,7 @@
 
 ## Estado actual
 
-- `npm test`: 12 pruebas aprobadas en la ultima ejecucion.
+- `npm test`: 16 pruebas aprobadas en la ultima ejecucion.
 - `npm run eval:ollama`: herramienta diagnostica provisional; no define ni aprueba criterios de Gate 3.
 - Ollama accesible ahora desde este entorno en `host.docker.internal:11434`; modelo disponible: `qwen2.5:3b`.
 - Mosquitto y Frigate no estaban activos en la ultima comprobacion de `docker compose ps`.
@@ -21,9 +21,10 @@
 - Cola de analisis: maximo un analisis activo y un evento pendiente; el resto se coalesce con contador. Es memoria volatil.
 - Context: el analyzer recibe un resumen factual allowlisted de snapshots Frigate `before`/`after`; los campos arbitrarios de `raw_event` no se reenvian a Ollama.
 - Contexto OIV: contrato neutral probado con Frigate y fixture retail sintetica; no implica soporte funcional retail.
+- Decision Gate: propuestas se bloquean sin politica; coincidencias de politica sintetica solo producen `SIMULATED`, sin ejecucion.
 - Fallo de Ollama: el evento queda accesible en `/api/events/latest`, el analisis devuelve HTTP 204 y la cola cuenta `failed`/`lastError`; Node sigue respondiendo.
 - Salud: `/api/status` y `/api/events/health` exponen la cola. Actualmente `/api/status` conserva `estado: operativo` ante fallo de analisis.
-- Suite: pruebas unitarias cubren normalizacion `new`/`update`/`end`, contexto OIV sintetico, contratos, timeout, prompt, cola y respuesta HTTP de `/api/status`.
+- Suite: 16 pruebas unitarias cubren normalizacion `new`/`update`/`end`, contexto OIV, Decision Gate fail-closed/dry-run, contratos, timeout, prompt, cola y respuesta HTTP de `/api/status`.
 
 ## Hallazgo principal de calidad
 

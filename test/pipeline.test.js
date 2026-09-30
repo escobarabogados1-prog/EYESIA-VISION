@@ -6,7 +6,9 @@ const contract = require('../src/services/operational-intelligence/contract');
 const analyzer = require('../src/services/operational-intelligence/analyzer');
 const { buildEventContext } = require('../src/services/operational-intelligence/context');
 const { createContext } = require('../src/services/operational-intelligence/context-contract');
+const { evaluateDecision } = require('../src/services/operational-intelligence/decision-gate');
 const { createAnalysisQueue } = require('../src/services/operational-intelligence/analysis-queue');
+const eventsService = require('../src/services/events');
 const statusRouter = require('../src/routes/status');
 
 const validEvent = {
@@ -181,6 +183,190 @@ test('accepts a synthetic retail context without Frigate-specific fields', () =>
     }),
     /debe ser un escalar finito/
   );
+  assert.throws(
+    () => createContext({ ...context, context_id: 'x'.repeat(129) }),
+    /Falta context_id/
+  );
+  assert.throws(
+    () => createContext({
+      ...context,
+      observations: Array(33).fill(context.observations[0])
+    }),
+    /observations debe contener evidencia/
+  );
+  assert.throws(
+    () => createContext({
+      ...context,
+      observations: [{
+        type: 'inventory',
+        values: { sku: 'SKU-42', detail: 'x'.repeat(513) }
+      }]
+    }),
+    /debe ser un escalar finito/
+  );
+  assert.throws(
+    () => createContext({
+      ...context,
+      observations: Array(32).fill({
+        type: 'inventory',
+        values: { detail: 'x'.repeat(512) }
+      })
+    }),
+    /context excede el tamano maximo/
+  );
+});
+
+test('blocks model proposals when no domain policy is configured', () => {
+  const decision = evaluateDecision({
+    context: buildEventContext(normalizeFrigateEvent({
+      type: 'new',
+      after: {
+        id: 'gate-event-1',
+        camera: 'front_door',
+        label: 'person',
+        top_score: 0.98
+      }
+    })),
+    proposal: {
+      classification: 'ALERTA',
+      risk: 'ALTO',
+      recommended_action: 'REVISAR'
+    }
+  });
+
+  assert.equal(decision.status, 'BLOCKED');
+  assert.equal(decision.reason_code, 'POLICY_MISSING');
+  assert.equal(decision.execution.mode, 'dry_run');
+  assert.equal(decision.execution.attempted, false);
+  assert.equal(decision.action_preview, null);
+});
+
+test('simulates only an exact proposal allowed by an approved matching policy', () => {
+  const context = buildEventContext(normalizeFrigateEvent({
+    type: 'new',
+    after: {
+      id: 'gate-event-2',
+      camera: 'front_door',
+      label: 'person',
+      top_score: 0.8
+    }
+  }));
+  const policy = {
+    policy_id: 'surveillance-review-v1',
+    version: '1',
+    domain: 'surveillance',
+    approval_status: 'approved',
+    approved_by: 'synthetic-test-owner',
+    approved_at: '2026-09-30T12:00:00.000Z',
+    allowed_proposals: [{
+      classification: 'DETECCION',
+      risk: 'BAJO',
+      recommended_action: 'REVISAR',
+      action: 'queue_operator_review'
+    }]
+  };
+
+  const simulated = evaluateDecision({
+    context,
+    proposal: {
+      classification: 'DETECCION',
+      risk: 'BAJO',
+      recommended_action: 'REVISAR'
+    },
+    policy
+  });
+  const denied = evaluateDecision({
+    context,
+    proposal: {
+      classification: 'ALERTA',
+      risk: 'ALTO',
+      recommended_action: 'OPEN_DOOR'
+    },
+    policy
+  });
+
+  assert.equal(simulated.status, 'SIMULATED');
+  assert.deepEqual(simulated.action_preview, { action: 'queue_operator_review' });
+  assert.equal(simulated.execution.attempted, false);
+  assert.equal(denied.status, 'BLOCKED');
+  assert.equal(denied.reason_code, 'PROPOSAL_NOT_ALLOWED');
+  assert.equal(denied.action_preview, null);
+});
+
+test('blocks invalid, unapproved, and cross-domain policies', () => {
+  const context = buildEventContext(normalizeFrigateEvent({
+    type: 'new',
+    after: {
+      id: 'gate-event-3',
+      camera: 'front_door',
+      label: 'person',
+      top_score: 0.8
+    }
+  }));
+  const proposal = {
+    classification: 'DETECCION',
+    risk: 'BAJO',
+    recommended_action: 'REVISAR'
+  };
+  const policy = {
+    policy_id: 'surveillance-review-v1',
+    version: '1',
+    domain: 'surveillance',
+    approval_status: 'approved',
+    approved_by: 'synthetic-test-owner',
+    approved_at: '2026-09-30T12:00:00.000Z',
+    allowed_proposals: [{
+      ...proposal,
+      action: 'queue_operator_review'
+    }]
+  };
+
+  assert.equal(evaluateDecision({
+    context,
+    proposal: { ...proposal, recommended_action: '' },
+    policy
+  }).reason_code, 'INVALID_PROPOSAL');
+  assert.equal(evaluateDecision({
+    context,
+    proposal,
+    policy: { ...policy, approval_status: 'pending' }
+  }).reason_code, 'POLICY_NOT_APPROVED');
+  assert.equal(evaluateDecision({
+    context,
+    proposal,
+    policy: { ...policy, domain: 'retail_analytics' }
+  }).reason_code, 'POLICY_DOMAIN_MISMATCH');
+  assert.equal(evaluateDecision({
+    context,
+    proposal,
+    policy: { ...policy, allowed_proposals: [] }
+  }).reason_code, 'POLICY_INVALID');
+});
+
+test('stores the gate result alongside the current event analysis', () => {
+  const originalLog = console.log;
+  console.log = () => {};
+
+  try {
+    eventsService.recordEvent({ ...validEvent });
+    const decision = {
+      status: 'BLOCKED',
+      reason_code: 'POLICY_MISSING',
+      execution: { mode: 'dry_run', attempted: false },
+      action_preview: null
+    };
+
+    assert.equal(eventsService.recordAnalysis(
+      validEvent.event_id,
+      { classification: 'DETECCION' },
+      decision
+    ), true);
+    assert.equal(eventsService.getLatestEvent().decision_status, 'BLOCKED');
+    assert.deepEqual(eventsService.getLatestEvent().decision, decision);
+    assert.equal(eventsService.recordAnalysis('stale-event', {}, decision), false);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 test('ignores JSON values that are not Frigate event objects', () => {

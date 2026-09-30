@@ -125,6 +125,13 @@ misma una accion. La ejecucion queda bloqueada por defecto hasta contar con
 politica del dominio aprobada, autorizacion y evidencia auditable. No se
 definen acciones ni umbrales de riesgo en este PRD provisional.
 
+### RF-08. Decision Gate
+
+Cada propuesta de analisis debe producir una decision explicita. Sin politica,
+ante una politica invalida o si la propuesta no coincide exactamente con una
+regla permitida, el gate debe bloquearla. El prototipo solo puede generar
+previsualizaciones `dry_run`; no puede ejecutar acciones externas.
+
 ## Requisitos no funcionales
 
 - Configuracion mediante variables de entorno.

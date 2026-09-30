@@ -57,6 +57,8 @@ docker compose up -d
 	resume snapshots `before`/`after` con valores escalares antes del analisis.
 - Una fixture retail sintetica valida neutralidad del contrato; no hay un
 	adaptador retail ni ejecucion automatica implementados.
+- Decision Gate compara propuestas contra reglas exactas; bloquea si falta
+	politica y solo permite `dry_run` aun con coincidencia.
 - La integracion completa y su persistencia siguen en evolucion.
 - El repositorio aun no contiene EDGE en Go, Supabase, NATS, Keygen CE ni
 	Qwen2-VL integrados como implementacion verificable.

@@ -1,5 +1,10 @@
 const SLUG_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 const FIELD_PATTERN = /^[a-z][a-z0-9_.-]{0,63}$/;
+const MAX_CONTEXT_ID_LENGTH = 128;
+const MAX_OBSERVATIONS = 32;
+const MAX_CHANGES = 64;
+const MAX_FIELDS_PER_OBSERVATION = 64;
+const MAX_CONTEXT_BYTES = 16384;
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -20,7 +25,11 @@ function validateScalar(value, fieldName) {
 }
 
 function validateValues(values, fieldName) {
-  if (!isPlainObject(values) || Object.keys(values).length === 0) {
+  if (
+    !isPlainObject(values) ||
+    Object.keys(values).length === 0 ||
+    Object.keys(values).length > MAX_FIELDS_PER_OBSERVATION
+  ) {
     throw new Error(`${fieldName} debe ser un objeto no vacio`);
   }
 
@@ -43,7 +52,11 @@ function validateContext({
   observations,
   changes
 }) {
-  if (typeof contextId !== 'string' || !contextId.trim()) {
+  if (
+    typeof contextId !== 'string' ||
+    !contextId.trim() ||
+    contextId.length > MAX_CONTEXT_ID_LENGTH
+  ) {
     throw new Error('Falta context_id');
   }
 
@@ -84,7 +97,11 @@ function validateContext({
     throw new Error('lifecycle invalido');
   }
 
-  if (!Array.isArray(observations) || observations.length === 0) {
+  if (
+    !Array.isArray(observations) ||
+    observations.length === 0 ||
+    observations.length > MAX_OBSERVATIONS
+  ) {
     throw new Error('observations debe contener evidencia');
   }
 
@@ -108,7 +125,7 @@ function validateContext({
     validateValues(observation.values, 'observation.values');
   }
 
-  if (!Array.isArray(changes)) {
+  if (!Array.isArray(changes) || changes.length > MAX_CHANGES) {
     throw new Error('changes debe ser un arreglo');
   }
 
@@ -120,6 +137,21 @@ function validateContext({
 
     validateScalar(change.before, 'change.before');
     validateScalar(change.after, 'change.after');
+  }
+
+  const canonicalContext = {
+    context_id: contextId,
+    domain,
+    source,
+    occurred_at: occurredAt,
+    subject,
+    lifecycle,
+    observations,
+    changes
+  };
+
+  if (Buffer.byteLength(JSON.stringify(canonicalContext), 'utf8') > MAX_CONTEXT_BYTES) {
+    throw new Error('context excede el tamano maximo');
   }
 
   return true;

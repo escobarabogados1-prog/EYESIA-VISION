@@ -5,6 +5,8 @@ const camera = require('./services/camera');
 const mqttService = require('./services/mqtt');
 const eventsService = require('./services/events');
 const analyzer = require('./services/operational-intelligence/analyzer');
+const { buildEventContext } = require('./services/operational-intelligence/context');
+const { evaluateDecision } = require('./services/operational-intelligence/decision-gate');
 const { createAnalysisQueue } = require('./services/operational-intelligence/analysis-queue');
 const identityService = require('./services/identity');
 const installationService = require('./services/installation');
@@ -13,9 +15,16 @@ const app = express();
 const PORT = 3001;
 const analysisQueue = createAnalysisQueue({
   analyze: analyzer.analyze,
-  onResult: (event, analysis) =>
-    eventsService.getLatestEvent() === event &&
-    eventsService.recordAnalysis(event.event_id, analysis)
+  onResult: (event, analysis) => {
+    if (eventsService.getLatestEvent() !== event) return false;
+
+    const decision = evaluateDecision({
+      context: buildEventContext(event),
+      proposal: analysis
+    });
+
+    return eventsService.recordAnalysis(event.event_id, analysis, decision);
+  }
 });
 
 let latestFrame = null;
@@ -92,6 +101,16 @@ app.get('/api/events/latest/analysis', (req, res) => {
   }
 
   res.json(latestEvent.analysis);
+});
+
+app.get('/api/events/latest/decision', (req, res) => {
+  const latestEvent = eventsService.getLatestEvent();
+
+  if (!latestEvent || !latestEvent.decision) {
+    return res.status(204).end();
+  }
+
+  res.json(latestEvent.decision);
 });
 
 app.get('/api/events/health', (req, res) => {

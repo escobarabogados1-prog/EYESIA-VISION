@@ -16,10 +16,10 @@ Gate 3 esta abierto. Existen 10 criterios pendientes de definicion y evidencia.
 ## Trabajo actual
 
 Endurecer el prototipo Node.js de la raiz, manteniendo separada la arquitectura
-EDGE Go objetivo. Fases 1-7 estan implementadas: video, MQTT, contrato OIV,
-cola latest-wins, analyzer Ollama, adaptador Frigate y contrato de contexto
-neutral por dominio. Se verificaron relay/camara y MQTT reales; Context tiene
-pruebas sinteticas de vigilancia y retail, sin hardware ni Ollama.
+EDGE Go objetivo. Fases 1-8 estan implementadas: video, MQTT, contrato OIV,
+cola latest-wins, analyzer Ollama, adaptador Frigate, contrato de contexto
+neutral y Decision Gate fail-closed en modo dry-run. Se verificaron relay/
+camara y MQTT reales; Context y Gate tienen pruebas sinteticas.
 
 ## Siguiente paso
 
@@ -34,12 +34,12 @@ confidence de salida. Siguiente: acordar politica de riesgo/confidence con el
 ## Pendientes
 
 - Estado reciente: `/api/status` expone `cola_analisis`; con Ollama caido
-	conserva HTTP 200 y `estado=operativo`, mientras reporta `failed=1`. Hay 12
-	pruebas automatizadas aprobadas. Retail solo se valida como contrato sintetico.
-- Proximo: acordar semanticas y politicas por dominio con el propietario,
-	incluidos riesgo/confidence y significado de `estado=operativo`. Despues,
-	definir propuestas de decision y autorizacion; ninguna accion se ejecuta sin
-	politica aprobada y evidencia auditable.
+	conserva HTTP 200 y `estado=operativo`, mientras reporta `failed=1`. Hay 15
+	16 pruebas automatizadas aprobadas. No existe executor real ni aprobacion
+	confiable de politicas.
+- Proximo: definir registro confiable/aprobacion de politicas y autorizacion,
+  evaluar casos etiquetados por dominio y mantener el executor deshabilitado
+  hasta que esos controles y la auditoria durable esten aprobados.
 - Confirmar requisitos cambiados del producto.
 - Confirmar clasificaciones, riesgos y acciones.
 - Decidir persistencia historica.

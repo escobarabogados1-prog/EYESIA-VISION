@@ -17,7 +17,7 @@ function getLatestEvent() {
   return latestEvent;
 }
 
-function recordAnalysis(eventId, analysis) {
+function recordAnalysis(eventId, analysis, decision) {
   if (!latestEvent || latestEvent.event_id !== eventId) {
     return false;
   }
@@ -25,6 +25,8 @@ function recordAnalysis(eventId, analysis) {
   latestEvent = {
     ...latestEvent,
     analysis,
+    decision,
+    decision_status: decision.status,
     analysis_status: 'completed',
     analyzed_at: new Date().toISOString()
   };

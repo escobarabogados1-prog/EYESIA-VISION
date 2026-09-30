@@ -1,9 +1,3 @@
-Operational Intelligence ya analiza eventos de vigilancia con Ollama. Un
-contrato de contexto OIV neutral permite que futuros adaptadores representen
-otros dominios; por ahora solo Frigate está integrado. El contexto resume sus
-snapshots `before`/`after` sin enviar el payload crudo completo. No hay acciones
-automáticas habilitadas. Dashboard avanzado, notificaciones externas y
-licenciamiento siguen fuera del alcance actual.
 # EYESIA VISION
 
 ## Documentacion de la Fase 1
@@ -21,16 +15,18 @@ CÁMARA IP (MJPEG/HTTP, Basic Auth)
       → Mosquitto (MQTT local, topic frigate/events)
          → Node.js / Express (src/services/mqtt.js → src/services/events.js)
            → API REST (/api/events/latest, /api/events/health, /api/status)
-           → cola latest-wins → contexto Frigate → Ollama
+           → cola latest-wins → contexto OIV → Ollama → Decision Gate (dry-run)
 
 La cámara sigue además conectada directamente a Node.js (src/services/camera.js)
 para el relay MJPEG original (/api/camera/frame, /api/camera/stream), sin cambios.
 ```
 
-Operational Intelligence ya analiza eventos con Ollama. El contexto del analyzer
-resume los snapshots `before`/`after` de Frigate sin enviar el payload crudo
-completo. Dashboard avanzado, notificaciones externas y licenciamiento siguen
-fuera del alcance actual.
+Operational Intelligence ya analiza eventos de vigilancia con Ollama. El
+contrato OIV neutral permite futuros adaptadores; por ahora solo Frigate está
+integrado. Sin política, el Decision Gate bloquea la propuesta; una coincidencia
+solo genera una vista previa `dry_run`, nunca ejecuta acciones externas.
+Dashboard avanzado, notificaciones externas y licenciamiento siguen fuera del
+alcance actual.
 
 ## Variables de entorno
 
@@ -87,6 +83,11 @@ Nuevos:
   ha llegado ninguno.
 - `GET /api/events/latest/analysis` — análisis del último evento. `204` si no
   tiene análisis asociado.
+- `GET /api/events/latest/decision` — decisión del gate asociada al último
+  evento. En el prototipo, el gate solo bloquea o simula; no ejecuta acciones.
+- `GET /api/events/latest/decision` — resultado del Decision Gate. Sin política,
+  la propuesta queda `BLOCKED`; una coincidencia solo genera `SIMULATED`, nunca
+  ejecuta acciones externas.
 - `GET /api/events/health` — si MQTT está conectado, si Frigate está enviando
   eventos, cuándo llegó el último y el estado/contadores de la cola de análisis.
 

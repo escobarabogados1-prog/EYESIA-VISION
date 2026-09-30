@@ -43,3 +43,8 @@ el contrato y no constituye una integracion de producto.
 La salida del modelo no ejecuta acciones. El comportamiento tecnico por
 defecto es denegar ejecucion hasta que existan politica de dominio aprobada,
 autorizacion y trazabilidad. Esto no define umbrales ni acciones de producto.
+
+El prototipo implementa una evaluacion fail-closed: sin politica o sin
+coincidencia exacta la propuesta queda bloqueada; una coincidencia en pruebas
+solo puede producir `dry_run`. Los metadatos sinteticos de aprobacion no son
+una verificacion de identidad ni una aprobacion confiable de producto.
