@@ -23,20 +23,20 @@ camara y MQTT reales; Context y Gate tienen pruebas sinteticas.
 
 ## Siguiente paso
 
-`npm run eval:ollama` detecto que Ollama eleva `DETECCION/BAJO` a `ALERTA/MEDIO`
-por detector confidence 0.99, sin contexto adicional; tambien copia ese score a
-confidence de salida. Siguiente: acordar politica de riesgo/confidence con el
-	propietario antes de guardrails y evaluar casos etiquetados. Fallo Ollama inaccesible ya se refleja
-	en la cola expuesta tanto por `/api/status` como por `/api/events/health`; queda
-	decidir si `estado=operativo` significa API disponible o pipeline saludable.
-	Medir recuperacion MQTT y aprobar criterios/umbrales Gate 3.
+Definir con el propietario politicas y semanticas por dominio, y un mecanismo
+confiable de aprobacion/autorizacion. Despues, anadir casos etiquetados y
+auditoria durable. Mientras falten esos controles, el runtime debe seguir
+bloqueando propuestas por `POLICY_MISSING`; no habilitar acciones reales.
 
 ## Pendientes
 
 - Estado reciente: `/api/status` expone `cola_analisis`; con Ollama caido
-	conserva HTTP 200 y `estado=operativo`, mientras reporta `failed=1`. Hay 15
-	16 pruebas automatizadas aprobadas. No existe executor real ni aprobacion
+	conserva HTTP 200 y `estado=operativo`, mientras reporta `failed=1`. Hay 16
+	pruebas automatizadas aprobadas. No existe executor real ni aprobacion
 	confiable de politicas.
+- Git: `main` local contiene `93b4bcd` y `f86b0d6`; `origin/main` sigue en
+	`4b9618a`. El push agoto 20 s (`124`); no se confirmo publicacion. `eyesia/`
+	permanece sin modificar y fuera de esos commits.
 - Proximo: definir registro confiable/aprobacion de politicas y autorizacion,
   evaluar casos etiquetados por dominio y mantener el executor deshabilitado
   hasta que esos controles y la auditoria durable esten aprobados.

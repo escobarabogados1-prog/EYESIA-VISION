@@ -186,5 +186,7 @@
 - Se limitaron IDs, numero de observaciones/cambios/campos y el tamano del
 	contexto OIV para acotar recursos.
 - `npm test`: 16 pruebas aprobadas. Gate 3 sigue abierto.
-- El push de `93b4bcd` no se confirmo; `origin/main` sigue atrasado por
-	autenticacion de escritura. El commit local permanece intacto.
+- `93b4bcd` y `f86b0d6` permanecen en `main` local; `origin/main` sigue en
+	`4b9618a`. El push no concluyo en 20 s (`124`), por lo que la publicacion
+	sigue pendiente de conectividad/autenticacion de escritura. No se reescribio
+	historia ni se modifico `eyesia/`.

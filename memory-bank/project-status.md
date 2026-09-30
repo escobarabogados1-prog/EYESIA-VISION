@@ -13,6 +13,9 @@
 - Ollama accesible ahora desde este entorno en `host.docker.internal:11434`; modelo disponible: `qwen2.5:3b`.
 - Mosquitto y Frigate no estaban activos en la ultima comprobacion de `docker compose ps`.
 - No hay implementacion Go ni migracion aprobada.
+- Git: `main` local esta dos commits por delante de `origin/main`. Commits
+	`93b4bcd` y `f86b0d6`; el push expiró sin confirmación y el remoto sigue en
+	`4b9618a`. `eyesia/` no se modifico ni se incluyo.
 
 ## Trabajo verificado
 
@@ -46,7 +49,7 @@ Para el segundo caso no habia contexto adicional de amenaza; el modelo justifico
 
 ## Recomendacion
 
-Aprobar primero un conjunto pequeno de casos etiquetados con resultado esperado. Usarlo para evaluar el modelo y despues implementar guardrails deterministas solo para la politica aprobada. Mantener Node como runtime mientras se completa esa evidencia; no iniciar migracion a Go antes de que Gate 3 y el caso comercial de migracion esten definidos.
+Aprobar primero politicas por dominio y un conjunto pequeno de casos etiquetados. Implementar un registro confiable de politicas, autorizacion y auditoria durable antes de habilitar cualquier executor. Mantener Node como prototipo mientras se completa esa evidencia; no iniciar migracion a Go antes de definir Gate 3 y el caso comercial.
 
 ## Comandos de validacion
 
