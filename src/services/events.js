@@ -1,10 +1,7 @@
 // Servicio de eventos EYESIA.
-//
-// Responsabilidad ÚNICA en esta fase: recibir eventos ya normalizados
-// (por ejemplo desde mqtt.js) y mantener el último en memoria para que
-// la API pueda consultarlo. Deliberadamente NO toma decisiones, NO
-// genera alertas y NO usa IA: eso corresponde a la fase de EYESIA
-// Operational Intelligence, todavía no implementada.
+
+// El análisis se asocia al evento solo si sigue siendo el último recibido.
+// Así una respuesta lenta de Ollama no pisa un evento más reciente.
 
 let latestEvent = null;
 
@@ -20,7 +17,23 @@ function getLatestEvent() {
   return latestEvent;
 }
 
+function recordAnalysis(eventId, analysis) {
+  if (!latestEvent || latestEvent.event_id !== eventId) {
+    return false;
+  }
+
+  latestEvent = {
+    ...latestEvent,
+    analysis,
+    analysis_status: 'completed',
+    analyzed_at: new Date().toISOString()
+  };
+
+  return true;
+}
+
 module.exports = {
   recordEvent,
-  getLatestEvent
+  getLatestEvent,
+  recordAnalysis
 };

@@ -7,23 +7,37 @@ router.get('/status', (req, res) => {
   const camera = req.app.locals.camera || { connected: false };
   const mqttState = mqttService.getMqttState();
   const latestEvent = eventsService.getLatestEvent();
+  const analysis = latestEvent && latestEvent.analysis;
 
   res.json({
     sistema: 'ELITH SECURITYCAM',
     estado: 'operativo',
-    ia: 'pendiente de conectar',
+    ia: analysis ? 'operativa' : 'esperando análisis',
     camaras: camera.connected ? 1 : 0,
     camara: {
       conectada: camera.connected,
-      recibiendo_video: camera.connected
+      recibiendo_video: camera.connected,
+      reconectando: Boolean(camera.reconnecting),
+      ultimo_frame: camera.lastFrameAt || null,
+      ultimo_error: camera.lastError || null
     },
     mqtt: {
       conectado: mqttState.connected,
+      suscrito_frigate: mqttState.subscribed,
+      ultima_suscripcion: mqttState.lastSubscribedAt,
       ultimo_mensaje: mqttState.lastMessageAt,
       ultimo_error: mqttState.lastError
     },
+    cola_analisis: req.app.locals.analysisQueue
+      ? req.app.locals.analysisQueue.getState()
+      : null,
     ultimo_evento: latestEvent
-      ? { object: latestEvent.object, camera_id: latestEvent.camera_id, timestamp: latestEvent.timestamp }
+      ? {
+          object: latestEvent.object,
+          camera_id: latestEvent.camera_id,
+          timestamp: latestEvent.timestamp,
+          analisis: analysis || null
+        }
       : null
   });
 });

@@ -1,45 +1,78 @@
 const http = require('http');
-const CAMERA_HOST = '192.168.5.108';
-const CAMERA_PORT = 8080;
+const https = require('https');
+const FRIGATE_URL = process.env.FRIGATE_URL || 'http://localhost:5000';
+const FRIGATE_CAMERA = process.env.FRIGATE_CAMERA || 'elith_cam_1';
+const CAMERA_RECONNECT_DELAY_MS = 5000;
+const CAMERA_REQUEST_TIMEOUT_MS = 10000;
 
-const CAMERA_USER = 'elith1';
-const CAMERA_PASSWORD = process.env.CAMERA_PASSWORD;
+let reconnectTimer = null;
+let onFrameCallback = null;
+let onStateChange = null;
 
-function connectCamera(onFrame) {
-  if (!CAMERA_PASSWORD) {
-    console.error('ERROR: CAMERA_PASSWORD no está configurada.');
-    return;
+const state = {
+  connected: false,
+  reconnecting: false,
+  lastError: null,
+  lastFrameAt: null
+};
+
+function updateState(changes) {
+  Object.assign(state, changes);
+
+  if (typeof onStateChange === 'function') {
+    onStateChange({ ...state });
   }
+}
 
-  const auth = Buffer.from(
-    `${CAMERA_USER}:${CAMERA_PASSWORD}`
-  ).toString('base64');
+function scheduleReconnect(errorMessage) {
+  updateState({
+    connected: false,
+    reconnecting: true,
+    lastError: errorMessage
+  });
 
-  const options = {
-    hostname: CAMERA_HOST,
-    port: CAMERA_PORT,
-    path: '/video/mjpeg',
+  if (reconnectTimer) return;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    updateState({ reconnecting: false });
+    openCameraConnection();
+  }, CAMERA_RECONNECT_DELAY_MS);
+  reconnectTimer.unref();
+}
+
+function openCameraConnection() {
+  const streamUrl = new URL(
+    `/api/${encodeURIComponent(FRIGATE_CAMERA)}`,
+    FRIGATE_URL
+  );
+  const requestOptions = {
+    hostname: streamUrl.hostname,
+    port: streamUrl.port || (streamUrl.protocol === 'https:' ? 443 : 80),
+    path: `${streamUrl.pathname}${streamUrl.search}`,
     method: 'GET',
     headers: {
-      Authorization: `Basic ${auth}`,
-      Accept: '*/*',
+      Accept: 'multipart/x-mixed-replace',
       'User-Agent': 'Mozilla/5.0'
     }
   };
+  const httpClient = streamUrl.protocol === 'https:' ? https : http;
 
-  console.log('Conectando a ELITH SECURITYCAM...');
+  console.log(`Conectando al stream Frigate de ${FRIGATE_CAMERA}...`);
 
-  const req = http.request(options, (res) => {
-    console.log(`Cámara HTTP: ${res.statusCode}`);
+  const req = httpClient.request(requestOptions, (res) => {
+    console.log(`Frigate HTTP: ${res.statusCode}`);
     console.log(`Content-Type: ${res.headers['content-type']}`);
 
     if (res.statusCode !== 200) {
-      console.error('La cámara no aceptó la conexión.');
+      console.error('Frigate no aceptó la conexión de video.');
+      scheduleReconnect(`Frigate respondió HTTP ${res.statusCode}`);
       res.resume();
       return;
     }
 
-    console.log('Flujo MJPEG conectado.');
+    updateState({ reconnecting: false, lastError: null });
+    console.log('Flujo MJPEG de Frigate conectado.');
 
     let buffer = Buffer.alloc(0);
 
@@ -64,26 +97,49 @@ function connectCamera(onFrame) {
 
         console.log('FRAME RECIBIDO:', frame.length, 'bytes');
 
-        onFrame(frame);
+        updateState({
+          connected: true,
+          reconnecting: false,
+          lastError: null,
+          lastFrameAt: new Date().toISOString()
+        });
+        onFrameCallback(frame);
       }
     });
 
     res.on('end', () => {
       console.log('Flujo de cámara cerrado.');
+      scheduleReconnect('Flujo de cámara cerrado');
     });
 
     res.on('error', (error) => {
       console.error('Error en flujo:', error.message);
+      scheduleReconnect(error.message);
     });
   });
 
   req.on('error', (error) => {
-    console.error('Error conectando cámara:', error.message);
+    console.error('Error conectando al stream Frigate:', error.message);
+    scheduleReconnect(error.message);
   });
 
+  req.setTimeout(CAMERA_REQUEST_TIMEOUT_MS, () => {
+    req.destroy(new Error('Timeout conectando a la cámara'));
+  });
   req.end();
 }
 
+function connectCamera(onFrame, stateChangeCallback) {
+  onFrameCallback = onFrame;
+  onStateChange = stateChangeCallback;
+  openCameraConnection();
+}
+
+function getCameraState() {
+  return { ...state };
+}
+
 module.exports = {
-  connectCamera
+  connectCamera,
+  getCameraState
 };

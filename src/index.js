@@ -4,16 +4,25 @@ const statusRouter = require('./routes/status');
 const camera = require('./services/camera');
 const mqttService = require('./services/mqtt');
 const eventsService = require('./services/events');
+const analyzer = require('./services/operational-intelligence/analyzer');
+const { createAnalysisQueue } = require('./services/operational-intelligence/analysis-queue');
 const identityService = require('./services/identity');
 const installationService = require('./services/installation');
 const deviceService = require('./services/device');
 const app = express();
 const PORT = 3001;
+const analysisQueue = createAnalysisQueue({
+  analyze: analyzer.analyze,
+  onResult: (event, analysis) =>
+    eventsService.getLatestEvent() === event &&
+    eventsService.recordAnalysis(event.event_id, analysis)
+});
 
 let latestFrame = null;
 let clients = [];
 
-app.locals.camera = { connected: false };
+app.locals.camera = camera.getCameraState();
+app.locals.analysisQueue = analysisQueue;
 
 app.use('/api', statusRouter);
 
@@ -75,13 +84,26 @@ app.get('/api/events/latest', (req, res) => {
   res.json(latestEvent);
 });
 
+app.get('/api/events/latest/analysis', (req, res) => {
+  const latestEvent = eventsService.getLatestEvent();
+
+  if (!latestEvent || !latestEvent.analysis) {
+    return res.status(204).end();
+  }
+
+  res.json(latestEvent.analysis);
+});
+
 app.get('/api/events/health', (req, res) => {
   const mqttState = mqttService.getMqttState();
   const latestEvent = eventsService.getLatestEvent();
 
   res.json({
     mqtt_conectado: mqttState.connected,
+    mqtt_suscrito_frigate: mqttState.subscribed,
     mqtt_ultimo_error: mqttState.lastError,
+    mqtt_ultima_suscripcion: mqttState.lastSubscribedAt,
+    cola_analisis: analysisQueue.getState(),
     frigate_recibiendo_eventos: Boolean(mqttState.lastMessageAt),
     ultimo_mensaje_mqtt: mqttState.lastMessageAt,
     ultimo_evento_en: latestEvent ? latestEvent.timestamp : null
@@ -92,7 +114,6 @@ app.get('/api/events/health', (req, res) => {
 
 camera.connectCamera((frame) => {
   latestFrame = frame;
-  app.locals.camera.connected = true;
 
   const header = Buffer.from(
     '--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ' +
@@ -111,10 +132,13 @@ camera.connectCamera((frame) => {
       clients = clients.filter(item => item !== client);
     }
   }
+}, (cameraState) => {
+  app.locals.camera = cameraState;
 });
 
 mqttService.connectMqtt((normalizedEvent) => {
   eventsService.recordEvent(normalizedEvent);
+  analysisQueue.enqueue(normalizedEvent);
 });
 
 app.listen(PORT, () => {

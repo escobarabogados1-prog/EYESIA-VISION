@@ -28,6 +28,7 @@ function validateInput(event) {
 
   if (
     typeof event.detection.confidence !== 'number' ||
+    !Number.isFinite(event.detection.confidence) ||
     event.detection.confidence < 0 ||
     event.detection.confidence > 1
   ) {
@@ -41,10 +42,10 @@ function createResult({
   classification,
   risk,
   confidence,
-  factors = [],
-  reason = '',
-  missingData = [],
-  recommendedAction = 'REVISAR'
+  factors,
+  reason,
+  missingData,
+  recommendedAction
 }) {
   const validClassifications = [
     'DETECCION',
@@ -64,6 +65,31 @@ function createResult({
 
   if (!validRisks.includes(risk)) {
     throw new Error('Riesgo inválido');
+  }
+
+  if (
+    typeof confidence !== 'number' ||
+    !Number.isFinite(confidence) ||
+    confidence < 0 ||
+    confidence > 1
+  ) {
+    throw new Error('Confianza de análisis inválida');
+  }
+
+  if (!Array.isArray(factors)) {
+    throw new Error('Factores inválidos');
+  }
+
+  if (typeof reason !== 'string') {
+    throw new Error('Razón inválida');
+  }
+
+  if (!Array.isArray(missingData)) {
+    throw new Error('Datos faltantes inválidos');
+  }
+
+  if (typeof recommendedAction !== 'string' || !recommendedAction.trim()) {
+    throw new Error('Acción recomendada inválida');
   }
 
   return {

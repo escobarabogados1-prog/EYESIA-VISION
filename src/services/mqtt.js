@@ -9,6 +9,8 @@ let client = null;
 
 const state = {
   connected: false,
+  subscribed: false,
+  lastSubscribedAt: null,
   lastError: null,
   lastMessageAt: null
 };
@@ -25,9 +27,17 @@ const state = {
  * Referencia de campos: https://docs.frigate.video/integrations/mqtt/
  */
 function normalizeFrigateEvent(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+
   const frigateEvent = payload.after || payload.before;
 
-  if (!frigateEvent) {
+  if (
+    !frigateEvent ||
+    typeof frigateEvent !== 'object' ||
+    Array.isArray(frigateEvent)
+  ) {
     return null;
   }
 
@@ -51,6 +61,13 @@ function normalizeFrigateEvent(payload) {
     object: frigateEvent.label || 'unknown',
     confidence: Number(confidenceRaw.toFixed ? confidenceRaw.toFixed(4) : confidenceRaw),
     timestamp: new Date(timestampSeconds * 1000).toISOString(),
+    device: {
+      camera_id: frigateEvent.camera || 'desconocida'
+    },
+    detection: {
+      object: frigateEvent.label || 'unknown',
+      confidence: Number(confidenceRaw.toFixed ? confidenceRaw.toFixed(4) : confidenceRaw)
+    },
     zone: Array.isArray(frigateEvent.current_zones) && frigateEvent.current_zones.length > 0
       ? frigateEvent.current_zones[0]
       : null,
@@ -71,13 +88,18 @@ function connectMqtt(onEvent) {
 
   client.on('connect', () => {
     state.connected = true;
+    state.subscribed = false;
     state.lastError = null;
     console.log(`MQTT conectado a ${MQTT_URL}`);
 
     client.subscribe(EVENTS_TOPIC, (err) => {
       if (err) {
+        state.subscribed = false;
+        state.lastError = err.message;
         console.error('Error suscribiendo a', EVENTS_TOPIC, err.message);
       } else {
+        state.subscribed = true;
+        state.lastSubscribedAt = new Date().toISOString();
         console.log('Suscrito a', EVENTS_TOPIC);
       }
     });
@@ -89,10 +111,12 @@ function connectMqtt(onEvent) {
 
   client.on('close', () => {
     state.connected = false;
+    state.subscribed = false;
   });
 
   client.on('error', (error) => {
     state.connected = false;
+    state.subscribed = false;
     state.lastError = error.message;
     console.error('Error MQTT:', error.message);
   });
@@ -131,5 +155,6 @@ function getMqttState() {
 
 module.exports = {
   connectMqtt,
-  getMqttState
+  getMqttState,
+  normalizeFrigateEvent
 };
